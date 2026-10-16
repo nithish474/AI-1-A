@@ -1,0 +1,148 @@
+{
+  "model_version": "cnn-v1.0.0-cpu",
+  "architecture": "BioacousticCNN-4Block",
+  "created_at": "2026-10-11T10:24:08Z",
+  "training_duration_seconds": 67.04,
+  "dataset_fingerprint": "a7f2955b56846348",
+  "num_classes": 5,
+  "species_ids": [
+    "bubo-virginianus",
+    "cardinalis-cardinalis",
+    "dryocopus-pileatus",
+    "poecile-atricapillus",
+    "turdus-migratorius"
+  ],
+  "label_to_idx": {
+    "bubo-virginianus": 0,
+    "cardinalis-cardinalis": 1,
+    "dryocopus-pileatus": 2,
+    "poecile-atricapillus": 3,
+    "turdus-migratorius": 4
+  },
+  "idx_to_label": {
+    "0": "bubo-virginianus",
+    "1": "cardinalis-cardinalis",
+    "2": "dryocopus-pileatus",
+    "3": "poecile-atricapillus",
+    "4": "turdus-migratorius"
+  },
+  "species_metadata": {
+    "cardinalis-cardinalis": {
+      "commonName": "Northern Cardinal",
+      "scientificName": "Cardinalis cardinalis"
+    },
+    "turdus-migratorius": {
+      "commonName": "American Robin",
+      "scientificName": "Turdus migratorius"
+    },
+    "bubo-virginianus": {
+      "commonName": "Great Horned Owl",
+      "scientificName": "Bubo virginianus"
+    },
+    "dryocopus-pileatus": {
+      "commonName": "Pileated Woodpecker",
+      "scientificName": "Dryocopus pileatus"
+    },
+    "poecile-atricapillus": {
+      "commonName": "Black-capped Chickadee",
+      "scientificName": "Poecile atricapillus"
+    }
+  },
+  "preprocessing": {
+    "sample_rate": 22050,
+    "duration_seconds": 3.0,
+    "n_mels": 64,
+    "n_fft": 1024,
+    "hop_length": 512,
+    "f_min": 150.0,
+    "f_max": 11000.0
+  },
+  "best_val_loss": 1.5985,
+  "best_val_accuracy": 0.2,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.6902,
+      "train_acc": 0.0,
+      "val_loss": 1.5985,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.453,
+      "train_acc": 0.5556,
+      "val_loss": 1.6035,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.3333,
+      "train_acc": 0.3333,
+      "val_loss": 1.6116,
+      "val_acc": 0.4
+    },
+    {
+      "epoch": 4,
+      "train_loss": 1.4059,
+      "train_acc": 0.4444,
+      "val_loss": 1.6132,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 5,
+      "train_loss": 1.3099,
+      "train_acc": 0.2222,
+      "val_loss": 1.6349,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 6,
+      "train_loss": 1.5016,
+      "train_acc": 0.2222,
+      "val_loss": 1.6653,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 7,
+      "train_loss": 1.1967,
+      "train_acc": 0.5556,
+      "val_loss": 1.6728,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 8,
+      "train_loss": 1.2807,
+      "train_acc": 0.5556,
+      "val_loss": 1.6967,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 9,
+      "train_loss": 1.3927,
+      "train_acc": 0.3333,
+      "val_loss": 1.7001,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 10,
+      "train_loss": 1.5399,
+      "train_acc": 0.3333,
+      "val_loss": 1.714,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 11,
+      "train_loss": 1.1694,
+      "train_acc": 0.3333,
+      "val_loss": 1.7014,
+      "val_acc": 0.2
+    },
+    {
+      "epoch": 12,
+      "train_loss": 1.2881,
+      "train_acc": 0.4444,
+      "val_loss": 1.6858,
+      "val_acc": 0.2
+    }
+  ]
+}

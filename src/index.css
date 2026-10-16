@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Leaflet Dark Theme Overrides for Bioacoustics UI */
+.avian-leaflet-popup .leaflet-popup-content-wrapper {
+  background: #090e17 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.75), 0 8px 10px -6px rgba(0, 0, 0, 0.75) !important;
+  padding: 0 !important;
+}
+
+.avian-leaflet-popup .leaflet-popup-content {
+  margin: 12px 14px !important;
+  line-height: 1.4 !important;
+}
+
+.avian-leaflet-popup .leaflet-popup-tip {
+  background: #090e17 !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.35) !important;
+  border-left: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+.avian-leaflet-popup .leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  top: 10px !important;
+  right: 10px !important;
+  padding: 4px !important;
+}
+
+.avian-leaflet-popup .leaflet-popup-close-button:hover {
+  color: #34d399 !important;
+}
+
+/* Leaflet Zoom control styling */
+.leaflet-bar {
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-bar a {
+  background-color: #0f172a !important;
+  color: #34d399 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #6ee7b7 !important;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+}

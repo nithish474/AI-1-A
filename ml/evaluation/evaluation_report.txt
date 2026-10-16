@@ -1,0 +1,32 @@
+======================================================================
+BIRDSONG BIOACOUSTICS - CUSTOM CNN EVALUATION REPORT
+======================================================================
+Model Version: cnn-v1.0.0-cpu
+Held-Out Test Samples: 5
+Number of Species Classes: 5
+----------------------------------------------------------------------
+OVERALL PERFORMANCE (Held-Out Split):
+  Test Accuracy:     20.00%
+  Macro Precision:   4.00%
+  Macro Recall:      20.00%
+  Macro F1-Score:    0.0667
+  Weighted F1-Score: 0.0667
+----------------------------------------------------------------------
+PER-SPECIES METRICS:
+  Great Horned Owl (bubo-virginianus):
+    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
+  Northern Cardinal (cardinalis-cardinalis):
+    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
+  Pileated Woodpecker (dryocopus-pileatus):
+    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
+  Black-capped Chickadee (poecile-atricapillus):
+    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
+  American Robin (turdus-migratorius):
+    Precision: 20.00% | Recall: 100.00% | F1: 0.3333 | Support: 1
+----------------------------------------------------------------------
+TOP CONFUSION PAIRS:
+  Actual: bubo-virginianus -> Predicted: turdus-migratorius (1 occurrences)
+  Actual: cardinalis-cardinalis -> Predicted: turdus-migratorius (1 occurrences)
+  Actual: dryocopus-pileatus -> Predicted: turdus-migratorius (1 occurrences)
+  Actual: poecile-atricapillus -> Predicted: turdus-migratorius (1 occurrences)
+======================================================================

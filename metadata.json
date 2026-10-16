@@ -1,0 +1,6 @@
+{
+  "name": "BirdSong – AI-Based Bird Species Recognition and Ecosystem Health Monitoring",
+  "description": "Bioacoustic bird song recognition, real-time Mel-spectrogram analysis, high-resolution species catalog, and ecosystem biodiversity monitor.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
