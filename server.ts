@@ -144,10 +144,10 @@ app.get('/api/health', (req, res) => {
 
 // Candidate models ordered by performance and availability with instant fallback
 const GEMINI_CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
   'gemini-3.1-flash-lite',
-  'gemini-3-flash-preview',
+  'gemini-3.8-flash',
   'gemini-flash-latest',
+  'gemini-3-flash-preview',
 ];
 
 interface GeminiStatusCache {
@@ -191,6 +191,7 @@ app.get('/api/gemini/status', async (req, res) => {
 
   const startTime = Date.now();
   let lastErrorMsg = '';
+  let encounteredRateLimit = false;
 
   for (const model of GEMINI_CANDIDATE_MODELS) {
     try {
@@ -216,27 +217,13 @@ app.get('/api/gemini/status', async (req, res) => {
     } catch (err: any) {
       lastErrorMsg = err?.message || String(err);
       const isRateLimit = lastErrorMsg.includes('429') || lastErrorMsg.includes('RESOURCE_EXHAUSTED');
-      const isHighDemand = lastErrorMsg.includes('503') || lastErrorMsg.includes('UNAVAILABLE') || lastErrorMsg.includes('demand');
-
-      if (isHighDemand) {
-        // High demand spike on this model; continue to next fallback candidate
-        continue;
-      }
-
-      if (isRateLimit) {
-        geminiStatusCache = {
-          status: 'rate_limited',
-          message: 'Gemini service rate limited (429). Please retry in a moment.',
-          model,
-          timestamp: Date.now(),
-        };
-        res.json(geminiStatusCache);
-        return;
-      }
+      if (isRateLimit) encounteredRateLimit = true;
+      // Continue to next candidate model so a single model limit doesn't take down the service
+      continue;
     }
   }
 
-  const isRateLimit = lastErrorMsg.includes('429') || lastErrorMsg.includes('RESOURCE_EXHAUSTED');
+  const isRateLimit = encounteredRateLimit || lastErrorMsg.includes('429') || lastErrorMsg.includes('RESOURCE_EXHAUSTED');
   const isHighDemand = lastErrorMsg.includes('503') || lastErrorMsg.includes('UNAVAILABLE') || lastErrorMsg.includes('demand');
 
   geminiStatusCache = {
@@ -623,13 +610,14 @@ app.post('/api/classify-audio', upload.single('audio') as any, async (req, res) 
   // If Gemini API is available and audio is provided, attempt Multimodal identification
   const ai = getGenAI();
   if (ai && audioBase64) {
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 18000);
+    const overallTimeoutMs = 28000;
+    const modelAttemptTimeoutMs = 14000;
+    const deadline = Date.now() + overallTimeoutMs;
 
     const candidateModels = GEMINI_CANDIDATE_MODELS;
 
     for (const model of candidateModels) {
-      if (abortController.signal.aborted) break;
+      if (Date.now() >= deadline) break;
 
       try {
         const prompt =
@@ -680,13 +668,10 @@ app.post('/api/classify-audio', upload.single('audio') as any, async (req, res) 
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
-          abortController.signal.addEventListener('abort', () => {
-            reject(new Error('Timeout after 18 seconds'));
-          });
+          setTimeout(() => reject(new Error(`Timeout after ${modelAttemptTimeoutMs}ms`)), modelAttemptTimeoutMs);
         });
 
         const response = await Promise.race([responsePromise, timeoutPromise]);
-        clearTimeout(timeoutId);
 
         const text = response.text?.trim();
         if (text) {
@@ -721,7 +706,6 @@ app.post('/api/classify-audio', upload.single('audio') as any, async (req, res) 
         console.info(`Multimodal classification attempt on ${model} failed, trying next fallback:`, err?.message || err);
       }
     }
-    clearTimeout(timeoutId);
   }
 
   // Fallback to spectral heuristic matching
