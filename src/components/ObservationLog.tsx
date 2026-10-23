@@ -32,6 +32,7 @@ interface ObservationLogProps {
   speciesList?: BirdSpecies[];
   onDeleteObservation: (id: string) => Promise<void> | void;
   onNavigateToClassifier?: () => void;
+  initialViewMode?: 'list' | 'map';
 }
 
 function sanitizeCSVField(value: string | number | undefined | null): string {
@@ -48,8 +49,15 @@ export const ObservationLog: React.FC<ObservationLogProps> = ({
   speciesList = BIRD_SPECIES,
   onDeleteObservation,
   onNavigateToClassifier,
+  initialViewMode = 'list',
 }) => {
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>(initialViewMode);
+
+  useEffect(() => {
+    if (initialViewMode) {
+      setViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
   const [search, setSearch] = useState('');
   const [selectedSpeciesId, setSelectedSpeciesId] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');

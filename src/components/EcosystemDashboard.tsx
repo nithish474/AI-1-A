@@ -467,7 +467,7 @@ export const EcosystemDashboard: React.FC<EcosystemDashboardProps> = ({
               onSelectObservation={(obs) => {
                 setSelectedMapObservation(obs);
               }}
-              title="Avian Geolocation & Soundscape Distribution Map"
+              title="Soundscape Geolocation & Acoustic Distribution"
               subtitle="Spatial visualization of verified bioacoustic detections, GPS coordinates, and calling rate hotspots across field stations."
               height={460}
             />

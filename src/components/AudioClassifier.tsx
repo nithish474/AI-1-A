@@ -56,10 +56,11 @@ export interface ObservationPayload {
 }
 
 interface AudioClassifierProps {
-  onAddObservation: (payload: ObservationPayload) => Promise<void> | void;
+  onAddObservation: (payload: ObservationPayload) => Promise<any> | any;
   preselectedSpeciesId?: string | null;
   onClearPreselected?: () => void;
   onNavigateToLog?: () => void;
+  onNavigateToMap?: () => void;
 }
 
 export const AudioClassifier: React.FC<AudioClassifierProps> = ({
@@ -67,6 +68,7 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
   preselectedSpeciesId,
   onClearPreselected,
   onNavigateToLog,
+  onNavigateToMap,
 }) => {
   // Input state
   const [activeMode, setActiveMode] = useState<'sample' | 'record' | 'upload'>('sample');
@@ -191,6 +193,7 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -597,6 +600,18 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
 
   // Geolocation trigger (queries ONLY on explicit user click, never auto)
   const handleRequestLocation = () => {
+    // 1. Check secure context
+    if (
+      typeof window !== 'undefined' &&
+      !window.isSecureContext &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      setGpsError('Geolocation requires a secure HTTPS connection.');
+      return;
+    }
+
+    // 2. Check browser support
     if (!navigator.geolocation) {
       setGpsError('Geolocation is not supported by your browser.');
       return;
@@ -606,27 +621,51 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
     setGpsError(null);
     setCoordValidationMsg(null);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsRequestingGps(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setGpsCoordinates({ lat, lng });
-        setManualLat(lat.toFixed(4));
-        setManualLng(lng.toFixed(4));
-        setLocationSource('gps');
-        setSelectedStationId('custom');
-        if (!saveLocation) {
-          setSaveLocation(`Field GPS (${lat.toFixed(4)}°, ${lng.toFixed(4)}°)`);
+    const onPosSuccess = (pos: GeolocationPosition) => {
+      setIsRequestingGps(false);
+      setGpsError(null);
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setGpsCoordinates({ lat, lng });
+      setManualLat(lat.toFixed(4));
+      setManualLng(lng.toFixed(4));
+      setLocationSource('gps');
+      setSelectedStationId('custom');
+      // Automatically populate the Survey Location Name with real returned coordinates
+      setSaveLocation(`Field GPS (${lat.toFixed(4)}°, ${lng.toFixed(4)}°)`);
+    };
+
+    const tryGetPosition = (highAccuracy: boolean) => {
+      navigator.geolocation.getCurrentPosition(
+        onPosSuccess,
+        (err) => {
+          if (highAccuracy && (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)) {
+            // Fallback retry with standard accuracy (Wi-Fi / network IP)
+            tryGetPosition(false);
+            return;
+          }
+
+          setIsRequestingGps(false);
+          console.warn('Geolocation error:', err);
+          let msg = 'GPS coordinates unavailable. You can enter coordinates manually or select a station.';
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = 'Location permission denied. Please allow location access in your browser settings or enter coordinates manually.';
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = 'Location unavailable. Please verify GPS/location service is enabled or enter coordinates manually.';
+          } else if (err.code === err.TIMEOUT) {
+            msg = 'GPS request timed out. Please try again or enter coordinates manually.';
+          }
+          setGpsError(msg);
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: highAccuracy ? 12000 : 15000,
+          maximumAge: 5000,
         }
-      },
-      (err) => {
-        setIsRequestingGps(false);
-        console.warn('Geolocation denied or timed out:', err);
-        setGpsError('GPS coordinates unavailable. You can enter coordinates manually or select a station.');
-      },
-      { timeout: 8000, enableHighAccuracy: false }
-    );
+      );
+    };
+
+    tryGetPosition(true);
   };
 
   // Save Observation handler
@@ -634,6 +673,7 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
     if (!acceptedSpeciesId || !extractedFeatures) return;
 
     setIsSaving(true);
+    setSaveError(null);
     try {
       let conf = 0.85;
       let sourceTag = 'Spectral Heuristic';
@@ -655,7 +695,7 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
       const finalLocation =
         saveLocation.trim() ||
         (gpsCoordinates
-          ? `Point (${gpsCoordinates.lat.toFixed(4)}, ${gpsCoordinates.lng.toFixed(4)})`
+          ? `Field GPS (${gpsCoordinates.lat.toFixed(4)}°, ${gpsCoordinates.lng.toFixed(4)}°)`
           : 'Field Observation');
 
       await onAddObservation({
@@ -679,8 +719,9 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
       });
 
       setIsSaved(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving observation:', err);
+      setSaveError(err?.message || 'Failed to save observation to database. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -1406,17 +1447,17 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
                   </div>
                 </div>
 
-                {/* Optional GPS Location button (Prompt 8: queries ONLY on explicit click) */}
+                {/* Attached GPS and Station / Coordinate Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
                   <div className="flex items-center gap-2">
                     <button
                       id="request-gps-btn"
                       type="button"
                       onClick={handleRequestLocation}
-                      disabled={isRequestingGps || Boolean(gpsCoordinates)}
-                      className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition ${
+                      disabled={isRequestingGps}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition cursor-pointer ${
                         gpsCoordinates
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-sm'
                           : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
                       }`}
                     >
@@ -1429,17 +1470,41 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
                           : 'Attach GPS Coordinates'}
                       </span>
                     </button>
+
+                    {gpsCoordinates && (
+                      <button
+                        type="button"
+                        onClick={handleClearCoordinates}
+                        className="text-[11px] text-slate-400 hover:text-rose-400 underline transition cursor-pointer"
+                        title="Clear attached coordinates"
+                      >
+                        Clear
+                      </button>
+                    )}
+
                     {gpsError && (
                       <span className="text-[11px] text-amber-300 italic">{gpsError}</span>
                     )}
                   </div>
 
-                  {/* Save Button */}
+                  {/* Save Button & Navigation */}
                   <div className="flex items-center gap-2">
+                    {isSaved && onNavigateToMap && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToMap}
+                        className="px-3.5 py-1.5 bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-200 border border-emerald-500/40 rounded-xl text-xs font-medium transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>View on Map</span>
+                      </button>
+                    )}
+
                     {isSaved && onNavigateToLog && (
                       <button
+                        type="button"
                         onClick={onNavigateToLog}
-                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-xl text-xs font-medium transition flex items-center gap-1"
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-xl text-xs font-medium transition flex items-center gap-1 cursor-pointer"
                       >
                         <span>View in Observation Log</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -1450,7 +1515,7 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
                       id="save-observation-submit-btn"
                       onClick={handleSaveObservation}
                       disabled={isSaved || isSaving}
-                      className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-md ${
+                      className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-md cursor-pointer ${
                         isSaved
                           ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40 cursor-default'
                           : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
@@ -1470,6 +1535,57 @@ export const AudioClassifier: React.FC<AudioClassifierProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {/* Station Selection and Manual Coordinates Entry */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2 border-t border-slate-900">
+                  <div>
+                    <label className="block text-slate-400 text-[11px] mb-1">Station Preset (Optional)</label>
+                    <select
+                      value={selectedStationId}
+                      onChange={(e) => handleSelectStation(e.target.value)}
+                      className="w-full bg-slate-900 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">Select monitoring station...</option>
+                      {KNOWN_MONITORING_STATIONS.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name} ({st.lat.toFixed(2)}°, {st.lng.toFixed(2)}°)
+                        </option>
+                      ))}
+                      <option value="custom">Custom / Device GPS Coordinates</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 text-[11px] mb-1">Latitude (°N/S)</label>
+                    <input
+                      type="text"
+                      value={manualLat}
+                      onChange={(e) => handleManualCoordChange(e.target.value, manualLng)}
+                      placeholder="e.g. 12.9710"
+                      className="w-full bg-slate-900 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 text-[11px] mb-1">Longitude (°E/W)</label>
+                    <input
+                      type="text"
+                      value={manualLng}
+                      onChange={(e) => handleManualCoordChange(manualLat, e.target.value)}
+                      placeholder="e.g. 79.1645"
+                      className="w-full bg-slate-900 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {coordValidationMsg && (
+                  <div className="text-[11px] text-amber-300 italic">{coordValidationMsg}</div>
+                )}
+                {saveError && (
+                  <div className="text-[11px] text-rose-400 italic bg-rose-950/40 p-2 rounded-lg border border-rose-500/30">
+                    {saveError}
+                  </div>
+                )}
               </div>
             </div>
           ) : (

@@ -894,6 +894,10 @@ function checkOrStartPythonService() {
         stdio: 'ignore',
         env: { ...process.env, CNN_PORT: '5005' },
       });
+      pythonProcess.on('error', (err: any) => {
+        console.warn('Python CNN service not available (using native TypeScript Bioacoustic CNN engine):', err?.message);
+        pythonProcess = null;
+      });
       pythonProcess.unref();
     } catch (err) {
       console.warn('Could not auto-spawn Python CNN service:', err);

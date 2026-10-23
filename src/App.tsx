@@ -29,6 +29,7 @@ export default function App() {
   const [speciesList, setSpeciesList] = useState<BirdSpecies[]>(BIRD_SPECIES);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [isLoadingObs, setIsLoadingObs] = useState<boolean>(true);
+  const [logViewMode, setLogViewMode] = useState<'list' | 'map'>('list');
 
   // Suppress benign ResizeObserver loop notification messages
   useEffect(() => {
@@ -82,49 +83,32 @@ export default function App() {
     fetchObservations();
   }, [fetchSpecies, fetchObservations]);
 
+  // Refresh observation data whenever the observations or dashboard map tab is opened
+  useEffect(() => {
+    if (activeTab === 'observations' || activeTab === 'dashboard') {
+      fetchObservations();
+    }
+  }, [activeTab, fetchObservations]);
+
   // Handler to add persistent observation from classifier
   const handleAddObservation = async (payload: ObservationPayload) => {
-    try {
-      const res = await fetch('/api/observations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch('/api/observations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-      if (res.ok) {
-        const saved = await res.json();
-        setObservations((prev) => {
-          const withoutDemo = prev.filter(
-            (o) => !o.isDemo && !o.id.startsWith('obs-seed-') && !o.id.startsWith('seed-obs-')
-          );
-          const withoutSaved = withoutDemo.filter((o) => o.id !== saved.id);
-          return [saved, ...withoutSaved];
-        });
-        await fetchObservations();
-      } else {
-        // Optimistic fallback if network is offline
-        const fallbackObs: Observation = {
-          id: `obs-${Date.now()}`,
-          speciesId: payload.speciesId,
-          timestamp: new Date().toISOString(),
-          location: payload.location || 'Field Station',
-          latitude: payload.latitude,
-          longitude: payload.longitude,
-          confidence: payload.confidence,
-          notes: payload.notes,
-          source: 'classifier',
-          audioSource: payload.audioSource || 'sample',
-          durationSeconds: payload.durationSeconds,
-          callsDetected: payload.callsDetected,
-          callsPerMinute: payload.callsPerMinute,
-          activityLevel: payload.activityLevel,
-          activityUnavailableReason: payload.activityUnavailableReason,
-          peakFrequencyHz: payload.peakFrequencyHz,
-        };
-        setObservations((prev) => [fallbackObs, ...prev]);
-      }
-    } catch (err) {
-      console.error('Error posting observation to backend:', err);
+    if (res.ok) {
+      const saved = await res.json();
+      setObservations((prev) => {
+        const withoutSaved = prev.filter((o) => o.id !== saved.id);
+        return [saved, ...withoutSaved];
+      });
+      await fetchObservations();
+      return saved;
+    } else {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error || `Failed to save observation (${res.status})`);
     }
   };
 
@@ -307,7 +291,14 @@ export default function App() {
               onAddObservation={handleAddObservation}
               preselectedSpeciesId={preselectedSpeciesId}
               onClearPreselected={() => setPreselectedSpeciesId(null)}
-              onNavigateToLog={() => setActiveTab('observations')}
+              onNavigateToLog={() => {
+                setLogViewMode('list');
+                setActiveTab('observations');
+              }}
+              onNavigateToMap={() => {
+                setLogViewMode('map');
+                setActiveTab('observations');
+              }}
             />
           </ErrorBoundary>
         )}
@@ -325,6 +316,7 @@ export default function App() {
               speciesList={speciesList}
               onDeleteObservation={handleDeleteObservation}
               onNavigateToClassifier={() => setActiveTab('classifier')}
+              initialViewMode={logViewMode}
             />
           </ErrorBoundary>
         )}

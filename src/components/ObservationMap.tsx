@@ -551,10 +551,17 @@ export const ObservationMap: React.FC<ObservationMapProps> = ({
     }
 
     const boundsCoords: [number, number][] = [];
+    const seenIds = new Set<string>();
 
-    validObservations.forEach((obs) => {
-      const lat = obs.latitude as number;
-      const lng = obs.longitude as number;
+    const uniqueObservations = validObservations.filter((obs) => {
+      if (seenIds.has(obs.id)) return false;
+      seenIds.add(obs.id);
+      return true;
+    });
+
+    uniqueObservations.forEach((obs) => {
+      const lat = Number(obs.latitude);
+      const lng = Number(obs.longitude);
       boundsCoords.push([lat, lng]);
 
       const sp = speciesMap.get(obs.speciesId);
@@ -569,18 +576,22 @@ export const ObservationMap: React.FC<ObservationMapProps> = ({
           <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding-bottom: 6px; margin-bottom: 8px;">
             <div>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <strong style="color: #ffffff; font-size: 13px;">${sp?.commonName || obs.speciesId}</strong>
+                <strong style="color: #ffffff; font-size: 13px;">${sp?.commonName || obs.speciesId || 'Field Observation'}</strong>
                 ${
                   sp?.iucnStatus
                     ? `<span style="font-size: 10px; font-family: monospace; padding: 2px 5px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-weight: bold;">${sp.iucnStatus}</span>`
                     : ''
                 }
               </div>
-              <div style="font-size: 11px; font-style: italic; color: #34d399;">${sp?.scientificName || 'Aves sp.'}</div>
+              <div style="font-size: 11px; font-style: italic; color: #34d399;">${sp?.scientificName || (obs.speciesId ? 'Aves sp.' : 'Unclassified Soundscape')}</div>
             </div>
-            <span style="font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 9999px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.3);">
-              ${Math.round(obs.confidence * 100)}%
-            </span>
+            ${
+              obs.confidence !== undefined && obs.confidence > 0
+                ? `<span style="font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 9999px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    ${Math.round(obs.confidence * 100)}%
+                  </span>`
+                : ''
+            }
           </div>
 
           ${
@@ -603,13 +614,20 @@ export const ObservationMap: React.FC<ObservationMapProps> = ({
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #1e293b; padding-top: 4px; margin-top: 4px;">
               <span>Activity: <strong style="color: #fcd34d;">${obs.activityLevel || 'Standard'}</strong></span>
-              <span style="font-family: monospace; color: #94a3b8;">${obs.callsDetected} calls (${obs.callsPerMinute || '—'} cpm)</span>
+              <span style="font-family: monospace; color: #94a3b8;">${obs.callsDetected !== undefined ? `${obs.callsDetected} calls` : '—'}${obs.callsPerMinute !== undefined ? ` (${obs.callsPerMinute} cpm)` : ''}</span>
             </div>
             ${
               obs.peakFrequencyHz
                 ? `<div style="display: flex; align-items: center; justify-content: space-between; font-family: monospace; color: #94a3b8; font-size: 10px;">
                     <span>Peak Frequency:</span>
                     <strong style="color: #6ee7b7;">${(obs.peakFrequencyHz / 1000).toFixed(1)} kHz</strong>
+                  </div>`
+                : ''
+            }
+            ${
+              obs.notes
+                ? `<div style="font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.3; font-style: italic; border-top: 1px dashed #1e293b; padding-top: 4px;">
+                    "${obs.notes}"
                   </div>`
                 : ''
             }
@@ -654,6 +672,10 @@ export const ObservationMap: React.FC<ObservationMapProps> = ({
     } else if (boundsCoords.length === 1) {
       map.setView(boundsCoords[0], 13);
     }
+
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
   }, [validObservations, speciesMap, colorMode, onSelectObservation]);
 
   // Invalidate size on expanded toggle

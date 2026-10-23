@@ -84,11 +84,13 @@ export function validateCoordinates(
  * Checks if an observation has valid numeric coordinates within global geographic bounds.
  */
 export function isValidCoordinate(lat: unknown, lng: unknown): boolean {
-  if (typeof lat !== 'number' || typeof lng !== 'number') return false;
-  if (isNaN(lat) || isNaN(lng)) return false;
-  if (!isFinite(lat) || !isFinite(lng)) return false;
-  if (lat < -90 || lat > 90) return false;
-  if (lng < -180 || lng > 180) return false;
+  if (lat === null || lat === undefined || lng === null || lng === undefined) return false;
+  const numLat = typeof lat === 'number' ? lat : Number(lat);
+  const numLng = typeof lng === 'number' ? lng : Number(lng);
+  if (isNaN(numLat) || isNaN(numLng)) return false;
+  if (!isFinite(numLat) || !isFinite(numLng)) return false;
+  if (numLat < -90 || numLat > 90) return false;
+  if (numLng < -180 || numLng > 180) return false;
   return true;
 }
 
