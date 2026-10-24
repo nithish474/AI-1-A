@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+node_modules/
+.venv/
+.venv-cnn/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]

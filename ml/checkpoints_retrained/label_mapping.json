@@ -1,0 +1,38 @@
+{
+  "label_to_idx": {
+    "bubo-virginianus": 0,
+    "cardinalis-cardinalis": 1,
+    "dryocopus-pileatus": 2,
+    "poecile-atricapillus": 3,
+    "turdus-migratorius": 4
+  },
+  "idx_to_label": {
+    "0": "bubo-virginianus",
+    "1": "cardinalis-cardinalis",
+    "2": "dryocopus-pileatus",
+    "3": "poecile-atricapillus",
+    "4": "turdus-migratorius"
+  },
+  "species_metadata": {
+    "cardinalis-cardinalis": {
+      "commonName": "Northern Cardinal",
+      "scientificName": "Cardinalis cardinalis"
+    },
+    "turdus-migratorius": {
+      "commonName": "American Robin",
+      "scientificName": "Turdus migratorius"
+    },
+    "bubo-virginianus": {
+      "commonName": "Great Horned Owl",
+      "scientificName": "Bubo virginianus"
+    },
+    "dryocopus-pileatus": {
+      "commonName": "Pileated Woodpecker",
+      "scientificName": "Dryocopus pileatus"
+    },
+    "poecile-atricapillus": {
+      "commonName": "Black-capped Chickadee",
+      "scientificName": "Poecile atricapillus"
+    }
+  }
+}
