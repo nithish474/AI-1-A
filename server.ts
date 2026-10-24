@@ -1438,8 +1438,38 @@ app.get('/api/evaluation/latest', async (_req, res) => {
       return;
     }
     const data = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+
+    // Check dataset fingerprint freshness
+    const manifestPath = path.join(process.cwd(), 'ml', 'data', 'manifest.csv');
+    let currentManifestFingerprint = '';
+    if (fs.existsSync(manifestPath)) {
+      const manifestBytes = fs.readFileSync(manifestPath);
+      currentManifestFingerprint = crypto.createHash('sha256').update(manifestBytes).digest('hex').slice(0, 16);
+    }
+
+    const modelMetaPath = path.join(process.cwd(), 'ml', 'checkpoints', 'model_metadata.json');
+    let modelFingerprint = '';
+    if (fs.existsSync(modelMetaPath)) {
+      try {
+        const modelMeta = JSON.parse(fs.readFileSync(modelMetaPath, 'utf-8'));
+        modelFingerprint = modelMeta.dataset_fingerprint || '';
+      } catch {}
+    }
+
+    const reportFingerprint = data.dataset_fingerprint || '';
+    const isStale = Boolean(
+      (currentManifestFingerprint && reportFingerprint !== currentManifestFingerprint) ||
+      (modelFingerprint && reportFingerprint !== modelFingerprint)
+    );
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.json({
       available: true,
+      isStale,
+      currentManifestFingerprint,
+      modelFingerprint,
+      reliability: data.reliability || 'low',
+      warnings: data.warnings || [],
       report: data,
     });
   } catch (err) {

@@ -198,4 +198,72 @@ export interface DatasetStats {
   rejectionReasons?: Record<string, number>;
 }
 
+export interface EvaluationOverallMetrics {
+  accuracy: number;
+  accuracy_ci_95: [number, number];
+  macro_precision: number;
+  macro_recall: number;
+  macro_f1: number;
+  weighted_precision?: number;
+  weighted_recall?: number;
+  weighted_f1: number;
+  top2_accuracy?: number;
+  window_level_accuracy?: number;
+  average_confidence: number;
+}
 
+export interface SpeciesEvaluationMetrics {
+  common_name: string;
+  scientific_name: string;
+  precision: number;
+  recall: number;
+  f1_score: number;
+  support: number;
+}
+
+export interface DetailedPredictionItem {
+  recording_id: string;
+  species_id: string;
+  common_name: string;
+  scientific_name: string;
+  true_class: string;
+  predicted_class: string;
+  model_confidence: number;
+  is_correct: boolean;
+  is_top2?: boolean;
+  is_uncertain: boolean;
+  num_windows: number;
+  class_probabilities?: Record<string, number>;
+}
+
+export interface EvaluationReport {
+  model_version: string;
+  dataset_fingerprint: string;
+  created_at: string;
+  checkpoint_path: string;
+  reliability: 'low' | 'acceptable' | 'high';
+  warnings: string[];
+  test_recordings_count: number;
+  test_windows_count: number;
+  num_classes: number;
+  overall_metrics: EvaluationOverallMetrics;
+  baselines: {
+    random_chance: number;
+    majority_class: number;
+  };
+  per_species: Record<string, SpeciesEvaluationMetrics>;
+  class_labels: string[];
+  confusion_matrix: number[][];
+  uncertainty_threshold: number;
+  detailed_predictions: DetailedPredictionItem[];
+}
+
+export interface EvaluationApiResponse {
+  available: boolean;
+  isStale: boolean;
+  currentManifestFingerprint?: string;
+  modelFingerprint?: string;
+  reliability?: 'low' | 'acceptable' | 'high';
+  warnings?: string[];
+  report: EvaluationReport;
+}

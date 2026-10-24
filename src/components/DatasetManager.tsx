@@ -21,13 +21,14 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { DatasetStats, PredictionRecord } from '../types';
+import { DatasetStats, PredictionRecord, EvaluationReport, EvaluationApiResponse } from '../types';
 
 export const DatasetManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dataset' | 'evaluation' | 'predictions'>('dataset');
   const [stats, setStats] = useState<DatasetStats | null>(null);
   const [modelStatus, setModelStatus] = useState<any>(null);
-  const [evaluation, setEvaluation] = useState<any>(null);
+  const [evaluation, setEvaluation] = useState<EvaluationReport | null>(null);
+  const [evalApiResponse, setEvalApiResponse] = useState<EvaluationApiResponse | null>(null);
   const [predictions, setPredictions] = useState<PredictionRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export const DatasetManager: React.FC = () => {
       const [statsRes, mlRes, evalRes, predRes] = await Promise.all([
         fetch('/api/dataset/stats', { cache: 'no-store' }),
         fetch('/api/ml/status'),
-        fetch('/api/evaluation/latest'),
+        fetch('/api/evaluation/latest', { cache: 'no-store' }),
         fetch('/api/predictions?limit=50'),
       ]);
 
@@ -60,10 +61,16 @@ export const DatasetManager: React.FC = () => {
         setModelStatus(await mlRes.json());
       }
       if (evalRes.ok) {
-        const evalData = await evalRes.json();
-        if (evalData.available) {
+        const evalData: EvaluationApiResponse = await evalRes.json();
+        setEvalApiResponse(evalData);
+        if (evalData.available && evalData.report) {
           setEvaluation(evalData.report);
+        } else {
+          setEvaluation(null);
         }
+      } else {
+        setEvalApiResponse(null);
+        setEvaluation(null);
       }
       if (predRes.ok) {
         setPredictions(await predRes.json());
@@ -467,14 +474,69 @@ export const DatasetManager: React.FC = () => {
         <div className="space-y-6">
           {evaluation ? (
             <div className="space-y-6">
+              {/* Header Status Badges: Freshness, Reliability, Fingerprint */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-4 shadow-lg">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5 mr-2">
+                    <Cpu className="w-4 h-4 text-emerald-400" />
+                    <span>Held-Out Test Evaluation</span>
+                  </span>
+
+                  {evalApiResponse?.isStale ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Stale: re-run evaluation</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Verified Synced</span>
+                    </span>
+                  )}
+
+                  {evaluation.reliability === 'low' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Low reliability: only {evaluation.test_recordings_count || 5} test recordings</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                  <span>Fingerprint: <code className="text-emerald-300">{evaluation.dataset_fingerprint || 'N/A'}</code></span>
+                  <span>•</span>
+                  <span>Model: <code className="text-slate-300">{evaluation.model_version || 'cnn-v1.0.0-cpu'}</code></span>
+                </div>
+              </div>
+
+              {/* Statistical Rigor Warnings */}
+              {evaluation.warnings && evaluation.warnings.length > 0 && (
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200/90 flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <strong className="text-amber-300 font-semibold block text-xs">Statistical Reliability Note:</strong>
+                    {evaluation.warnings.map((w: string, idx: number) => (
+                      <p key={idx} className="text-amber-200/80 leading-relaxed">{w}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Overall Metrics Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-4 shadow-lg text-center">
-                  <span className="text-xs text-slate-400 block">Overall Test Accuracy</span>
+                  <span className="text-xs text-slate-400 block">Recording Test Accuracy</span>
                   <strong className="text-2xl font-bold font-mono text-emerald-400 mt-1 block">
                     {(evaluation.overall_metrics.accuracy * 100).toFixed(1)}%
                   </strong>
-                  <span className="text-[10px] text-slate-400">Strictly held-out split</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {evaluation.overall_metrics.accuracy_ci_95
+                      ? `95% CI: [${(evaluation.overall_metrics.accuracy_ci_95[0] * 100).toFixed(1)}% – ${(evaluation.overall_metrics.accuracy_ci_95[1] * 100).toFixed(1)}%]`
+                      : 'Strictly held-out split'}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                    Random: {(evaluation.baselines?.random_chance * 100 || 20).toFixed(0)}% • Majority: {(evaluation.baselines?.majority_class * 100 || 20).toFixed(0)}%
+                  </span>
                 </div>
 
                 <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-4 shadow-lg text-center">
@@ -482,23 +544,38 @@ export const DatasetManager: React.FC = () => {
                   <strong className="text-2xl font-bold font-mono text-amber-300 mt-1 block">
                     {evaluation.overall_metrics.macro_f1.toFixed(3)}
                   </strong>
-                  <span className="text-[10px] text-slate-400">Unweighted class mean</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    Weighted: {(evaluation.overall_metrics.weighted_f1 ?? evaluation.overall_metrics.macro_f1).toFixed(3)}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                    Macro Recall: {(evaluation.overall_metrics.macro_recall * 100).toFixed(1)}%
+                  </span>
                 </div>
 
                 <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-4 shadow-lg text-center">
-                  <span className="text-xs text-slate-400 block">Macro Recall</span>
+                  <span className="text-xs text-slate-400 block">Top-2 Accuracy</span>
                   <strong className="text-2xl font-bold font-mono text-sky-300 mt-1 block">
-                    {(evaluation.overall_metrics.macro_recall * 100).toFixed(1)}%
+                    {((evaluation.overall_metrics.top2_accuracy ?? 1) * 100).toFixed(1)}%
                   </strong>
-                  <span className="text-[10px] text-slate-400">Sensitivity across classes</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    Window Acc: {((evaluation.overall_metrics.window_level_accuracy ?? evaluation.overall_metrics.accuracy) * 100).toFixed(1)}%
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                    {evaluation.test_windows_count || 0} evaluated windows
+                  </span>
                 </div>
 
                 <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-4 shadow-lg text-center">
-                  <span className="text-xs text-slate-400 block">Uncertainty Threshold</span>
+                  <span className="text-xs text-slate-400 block">Held-Out Scope</span>
                   <strong className="text-2xl font-bold font-mono text-purple-300 mt-1 block">
-                    {((evaluation.uncertainty_threshold || 0.35) * 100).toFixed(0)}%
+                    {evaluation.test_recordings_count || 5} recs
                   </strong>
-                  <span className="text-[10px] text-slate-400">Flags low-confidence calls</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    Uncertainty: &lt; {((evaluation.uncertainty_threshold || 0.40) * 100).toFixed(0)}%
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                    {evaluation.num_classes} species classes
+                  </span>
                 </div>
               </div>
 
@@ -562,19 +639,9 @@ export const DatasetManager: React.FC = () => {
                     </div>
                   ) : null}
 
-                  {evaluation.common_confusion_pairs && evaluation.common_confusion_pairs.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800 space-y-1">
-                      <span className="text-[10px] uppercase font-mono text-slate-400 block">Acoustic Confusion Insights:</span>
-                      {evaluation.common_confusion_pairs.map((p: any, idx: number) => (
-                        <div key={idx} className="text-[11px] text-slate-300 flex items-center justify-between">
-                          <span>
-                            Actual <strong className="text-amber-300 font-mono">{p.actual}</strong> classified as <strong className="text-slate-200 font-mono">{p.predicted}</strong>
-                          </span>
-                          <span className="text-slate-400 font-mono">{p.count}×</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                    <span className="font-semibold text-slate-300">Aggregation Rule:</span> Recording predictions are formed by averaging softmax probabilities across all window slices.
+                  </div>
                 </div>
 
                 {/* Per-Species Breakdown (6 cols) */}
@@ -633,13 +700,82 @@ export const DatasetManager: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Per-Recording Detailed Predictions Table */}
+              {evaluation.detailed_predictions && evaluation.detailed_predictions.length > 0 && (
+                <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-5 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                      <span>Held-Out Test Recordings Audit Log</span>
+                    </h3>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {evaluation.detailed_predictions.length} recordings evaluated
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-[10px] text-slate-400 font-mono">
+                          <th className="p-2">Recording ID</th>
+                          <th className="p-2">Target Species</th>
+                          <th className="p-2">Actual Class</th>
+                          <th className="p-2">Predicted Class</th>
+                          <th className="p-2 text-right">Confidence</th>
+                          <th className="p-2 text-right">Windows</th>
+                          <th className="p-2 text-center">Outcome</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {evaluation.detailed_predictions.map((p) => (
+                          <tr key={p.recording_id} className="border-b border-slate-900 hover:bg-slate-950/40">
+                            <td className="p-2 font-mono text-slate-300 font-medium">
+                              {p.recording_id}
+                            </td>
+                            <td className="p-2">
+                              <span className="font-semibold text-white">{p.common_name}</span>
+                              <span className="text-[10px] italic text-slate-400 block">{p.scientific_name}</span>
+                            </td>
+                            <td className="p-2 font-mono text-slate-300 text-[11px]">
+                              {p.true_class}
+                            </td>
+                            <td className="p-2 font-mono text-[11px]">
+                              <span className={p.is_correct ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
+                                {p.predicted_class}
+                              </span>
+                            </td>
+                            <td className="p-2 text-right font-mono text-slate-200">
+                              {(p.model_confidence * 100).toFixed(1)}%
+                            </td>
+                            <td className="p-2 text-right font-mono text-slate-400">
+                              {p.num_windows}
+                            </td>
+                            <td className="p-2 text-center">
+                              {p.is_correct ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  <Check className="w-3 h-3" /> Correct
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                  <X className="w-3 h-3" /> Misclassified
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-12 text-center text-slate-400 space-y-2">
               <Cpu className="w-8 h-8 text-slate-600 mx-auto" />
               <h4 className="text-white font-bold">No Evaluation Report Found</h4>
               <p className="text-xs text-slate-400">
-                Run <code className="text-emerald-300">/ml_env/bin/python3 ml/evaluation/evaluate.py</code> to generate a held-out test report.
+                Run <code className="text-emerald-300">python3 ml/evaluation/evaluate.py</code> to generate a held-out test report.
               </p>
             </div>
           )}

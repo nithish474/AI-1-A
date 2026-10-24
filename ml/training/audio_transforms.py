@@ -2,14 +2,17 @@ import os
 import io
 import wave
 import subprocess
-import tempfile
 import numpy as np
 import torch
-from typing import Tuple, Optional
+from typing import Tuple, List, Optional
 
 SAMPLE_RATE = 16000
 TARGET_DURATION = 3.0  # seconds
 TARGET_SAMPLES = int(SAMPLE_RATE * TARGET_DURATION)  # 48,000 samples
+HOP_DURATION = 1.5  # seconds
+HOP_SAMPLES = int(SAMPLE_RATE * HOP_DURATION)  # 24,000 samples
+RMS_SILENCE_THRESHOLD = 0.002
+
 N_FFT = 1024
 HOP_LENGTH = 375
 N_MELS = 64
@@ -95,19 +98,69 @@ def load_audio_mono(file_path: str, target_sr: int = SAMPLE_RATE) -> Tuple[np.nd
         data = f.read()
     return decode_audio_with_ffmpeg(data, target_sr)
 
-def pad_or_crop_audio(samples: np.ndarray, target_length: int = TARGET_SAMPLES) -> np.ndarray:
+def pad_or_crop_audio(samples: np.ndarray, target_length: int = TARGET_SAMPLES, offset_ratio: float = 0.5) -> np.ndarray:
+    """Pads with zeros or crops audio to target_length based on offset_ratio in [0, 1]."""
     n = len(samples)
     if n == target_length:
-        return samples
+        return samples.copy()
     elif n > target_length:
-        # Take center or start crop
-        start = max(0, (n - target_length) // 2)
-        return samples[start:start + target_length]
+        max_start = n - target_length
+        start = int(np.clip(offset_ratio, 0.0, 1.0) * max_start)
+        return samples[start:start + target_length].copy()
     else:
-        # Pad with zeros
         padded = np.zeros(target_length, dtype=np.float32)
         padded[:n] = samples
         return padded
+
+def slice_audio_windows(
+    audio: np.ndarray,
+    sr: int = SAMPLE_RATE,
+    window_samples: int = TARGET_SAMPLES,
+    hop_samples: int = HOP_SAMPLES,
+    rms_threshold: float = RMS_SILENCE_THRESHOLD
+) -> List[Tuple[np.ndarray, int, float]]:
+    """
+    Slices audio into overlapping window_samples (e.g. 3.0s) with step hop_samples (e.g. 1.5s).
+    Filters out near-silent windows where RMS < rms_threshold.
+    Returns list of (window_samples, start_sample, rms_value).
+    Guarantees at least 1 window is returned if audio contains any signal (highest RMS fallback).
+    """
+    n = len(audio)
+    if n == 0:
+        return []
+
+    windows = []
+    all_candidates = []
+
+    if n <= window_samples:
+        padded = np.zeros(window_samples, dtype=np.float32)
+        padded[:n] = audio
+        rms = float(np.sqrt(np.mean(padded ** 2)))
+        windows.append((padded, 0, rms))
+        return windows
+
+    for start in range(0, n - window_samples + 1, hop_samples):
+        chunk = audio[start:start + window_samples]
+        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        all_candidates.append((chunk, start, rms))
+        if rms >= rms_threshold:
+            windows.append((chunk, start, rms))
+
+    # Also add the tail window if significant remaining audio
+    last_start = n - window_samples
+    if last_start > 0 and (len(all_candidates) == 0 or all_candidates[-1][1] < last_start):
+        chunk = audio[last_start:n]
+        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        all_candidates.append((chunk, last_start, rms))
+        if rms >= rms_threshold:
+            windows.append((chunk, last_start, rms))
+
+    # If all windows fell below threshold (e.g. quiet nocturnal recording), retain highest energy window
+    if len(windows) == 0 and len(all_candidates) > 0:
+        best_cand = max(all_candidates, key=lambda c: c[2])
+        windows.append(best_cand)
+
+    return windows
 
 def compute_mel_spectrogram(
     samples: np.ndarray,
@@ -155,6 +208,55 @@ def compute_mel_spectrogram(
         norm_mel = np.pad(norm_mel, ((0, 0), (0, pad_width)), mode='edge')
 
     return norm_mel.astype(np.float32)
+
+def augment_audio(samples: np.ndarray) -> np.ndarray:
+    """Audio-domain augmentations: random gain and light additive Gaussian noise."""
+    aug = samples.copy()
+    # Random gain between 0.8x and 1.2x
+    gain = np.random.uniform(0.8, 1.2)
+    aug = aug * gain
+
+    # Additive noise with 50% probability
+    if np.random.rand() > 0.5:
+        noise_level = np.random.uniform(0.001, 0.004)
+        noise = np.random.normal(0.0, noise_level, size=aug.shape).astype(np.float32)
+        aug = aug + noise
+
+    # Clip to valid audio range [-1.0, 1.0]
+    return np.clip(aug, -1.0, 1.0).astype(np.float32)
+
+def apply_spec_augment(
+    mel: np.ndarray,
+    max_freq_mask: int = 8,
+    max_time_mask: int = 16,
+    num_freq_masks: int = 1,
+    num_time_masks: int = 1
+) -> np.ndarray:
+    """
+    SpecAugment (Park et al. 2019): applies time and frequency channel masking to Mel-spectrogram.
+    Input: (n_mels, time_frames) or (1, n_mels, time_frames)
+    """
+    aug = mel.copy()
+    is_3d = (aug.ndim == 3)
+    data = aug[0] if is_3d else aug
+    n_mels, n_frames = data.shape
+    mean_val = float(np.mean(data))
+
+    # Frequency masking
+    for _ in range(num_freq_masks):
+        f_width = np.random.randint(1, max(2, max_freq_mask + 1))
+        f_start = np.random.randint(0, max(1, n_mels - f_width))
+        data[f_start:f_start + f_width, :] = mean_val
+
+    # Time masking
+    for _ in range(num_time_masks):
+        t_width = np.random.randint(1, max(2, max_time_mask + 1))
+        t_start = np.random.randint(0, max(1, n_frames - t_width))
+        data[:, t_start:t_start + t_width] = mean_val
+
+    if is_3d:
+        aug[0] = data
+    return aug.astype(np.float32)
 
 def extract_features_for_inference(audio_bytes: bytes, sr: int = SAMPLE_RATE) -> torch.Tensor:
     """End-to-end tensor preprocessing for inference input (1, 1, 64, 128)."""
