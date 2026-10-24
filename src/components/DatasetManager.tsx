@@ -17,6 +17,9 @@ import {
   Table,
   Check,
   ExternalLink,
+  Plus,
+  Upload,
+  X,
 } from 'lucide-react';
 import { DatasetStats, PredictionRecord } from '../types';
 
@@ -30,12 +33,21 @@ export const DatasetManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  // Add recordings modal and import state
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [speciesCatalog, setSpeciesCatalog] = useState<{ id: string; commonName: string; scientificName: string }[]>([]);
+  const [selectedSpeciesId, setSelectedSpeciesId] = useState<string>('cardinalis-cardinalis');
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [importing, setImporting] = useState<boolean>(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
   const fetchDatasetInfo = async () => {
     setLoading(true);
     setError(null);
     try {
       const [statsRes, mlRes, evalRes, predRes] = await Promise.all([
-        fetch('/api/dataset/stats'),
+        fetch('/api/dataset/stats', { cache: 'no-store' }),
         fetch('/api/ml/status'),
         fetch('/api/evaluation/latest'),
         fetch('/api/predictions?limit=50'),
@@ -66,7 +78,65 @@ export const DatasetManager: React.FC = () => {
 
   useEffect(() => {
     fetchDatasetInfo();
+    fetch('/api/species')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setSpeciesCatalog(data);
+          if (!data.some((s) => s.id === selectedSpeciesId)) {
+            setSelectedSpeciesId(data[0].id);
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not fetch species catalog for dataset importer:', err));
   }, []);
+
+  const handleImportRecordings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFiles || selectedFiles.length === 0) {
+      setImportError('Please select one or more audio files (.wav, .mp3, .ogg, .flac).');
+      return;
+    }
+    if (!selectedSpeciesId) {
+      setImportError('Please choose a catalog species.');
+      return;
+    }
+
+    setImporting(true);
+    setImportError(null);
+    setImportStatus('Uploading and merging recordings into dataset manifest...');
+
+    try {
+      const formData = new FormData();
+      formData.append('speciesId', selectedSpeciesId);
+      for (let i = 0; i < selectedFiles.length; i++) {
+        formData.append('audioFiles', selectedFiles[i]);
+      }
+
+      const res = await fetch('/api/dataset/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to import recordings.');
+      }
+
+      setImportStatus(data.message || 'Recordings imported successfully.');
+      await fetchDatasetInfo();
+      setTimeout(() => {
+        setIsAddModalOpen(false);
+        setSelectedFiles(null);
+        setImportStatus(null);
+      }, 1500);
+    } catch (err: any) {
+      setImportError(err.message || 'Failed to import recordings.');
+      setImportStatus(null);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleConfirmSpecies = async (predictionId: string, speciesId: string) => {
     setConfirmingId(predictionId);
@@ -112,6 +182,18 @@ export const DatasetManager: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setIsAddModalOpen(true);
+              setImportError(null);
+              setImportStatus(null);
+            }}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition self-start md:self-auto cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add recordings</span>
+          </button>
+
           <a
             href="/api/dataset/manifest"
             download="birdsong_manifest.csv"
@@ -124,7 +206,7 @@ export const DatasetManager: React.FC = () => {
           <button
             onClick={fetchDatasetInfo}
             disabled={loading}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition self-start md:self-auto cursor-pointer"
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition self-start md:self-auto cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -213,46 +295,85 @@ export const DatasetManager: React.FC = () => {
 
       {/* Tab 1: Dataset & Splits */}
       {activeTab === 'dataset' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Species Distribution (6 cols) */}
-          <div className="lg:col-span-6 bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-5 shadow-lg space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-emerald-400" />
-                <span>Labelled Recordings by Species</span>
-              </h3>
-              <span className="text-[10px] font-mono text-slate-400">
-                {stats ? Object.keys(stats.speciesCounts).length : 0} species classes
+        <div className="space-y-4">
+          {/* Small Status Line */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs px-4 py-2.5 rounded-xl bg-slate-900/60 border border-emerald-500/20 gap-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  stats?.modelIsStale ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                }`}
+              />
+              <span className="text-slate-300 font-medium">
+                {stats?.modelIsStale
+                  ? 'Dataset modified since model was trained (fingerprint mismatch). Checkpoint retrain recommended.'
+                  : 'Dataset in sync with model checkpoint.'}
               </span>
             </div>
+            <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
+              <span>Fingerprint: <strong className="text-slate-200">{stats?.manifestFingerprint || '—'}</strong></span>
+              {stats?.modelIsStale && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  STALE
+                </span>
+              )}
+            </div>
+          </div>
 
-            {stats && Object.keys(stats.speciesCounts).length > 0 ? (
-              <div className="space-y-2.5">
-                {Object.entries(stats.speciesCounts).map(([speciesName, count]) => {
-                  const pct = Math.round((count / (stats.validRecordings || 1)) * 100);
-                  return (
-                    <div key={speciesName} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-200 font-medium">{speciesName}</span>
-                        <span className="font-mono text-emerald-300 text-[11px]">
-                          {count} recordings ({pct}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-emerald-500/15">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Species Distribution (6 cols) */}
+            <div className="lg:col-span-6 bg-slate-900/60 border border-emerald-500/20 rounded-2xl p-5 shadow-lg space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-emerald-400" />
+                  <span>Labelled Recordings by Species</span>
+                </h3>
+                <span className="text-[10px] font-mono text-slate-400">
+                  {stats ? Object.keys(stats.speciesCounts).length : 0} species classes
+                </span>
               </div>
-            ) : (
-              <div className="p-8 text-center text-xs text-slate-400">
-                No recordings cataloged in manifest yet.
-              </div>
-            )}
+
+              {stats && Object.keys(stats.speciesCounts).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(stats.speciesCounts).map(([speciesName, count]) => {
+                    const pct = Math.round((count / (stats.validRecordings || 1)) * 100);
+                    const splitData = stats.speciesSplitCounts?.[speciesName];
+                    const dur = stats.speciesDurations?.[speciesName];
+                    return (
+                      <div key={speciesName} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-200 font-medium">{speciesName}</span>
+                          <div className="flex items-center gap-2">
+                            {splitData && (
+                              <span className="text-[10px] font-mono text-slate-400">
+                                [<span className="text-emerald-400">Tr: {splitData.train}</span> / <span className="text-amber-400">V: {splitData.val}</span> / <span className="text-sky-400">Te: {splitData.test}</span>]
+                              </span>
+                            )}
+                            <span className="font-mono text-emerald-300 text-[11px]">
+                              {count} recs ({pct}%)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-emerald-500/15">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        {dur !== undefined && (
+                          <div className="text-[10px] text-slate-400 font-mono text-right">
+                            {dur}s duration
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No recordings cataloged in manifest yet.
+                </div>
+              )}
 
             {/* Source Attribution & License Info */}
             <div className="pt-4 border-t border-emerald-500/15 space-y-2">
@@ -338,7 +459,8 @@ export const DatasetManager: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Tab 2: CNN Model & Evaluation Report */}
       {activeTab === 'evaluation' && (
@@ -625,6 +747,128 @@ export const DatasetManager: React.FC = () => {
               No predictions recorded yet. Run a classification in the Bioacoustic Classifier to log predictions.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Add Recordings Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-[#0b111e] border border-emerald-500/30 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative text-left">
+            <button
+              onClick={() => {
+                if (!importing) {
+                  setIsAddModalOpen(false);
+                  setImportError(null);
+                  setImportStatus(null);
+                }
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Add Recordings to Dataset
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Upload audio files to merge into the genuine dataset manifest and re-stratify.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleImportRecordings} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Target Bird Species
+                </label>
+                <select
+                  value={selectedSpeciesId}
+                  onChange={(e) => setSelectedSpeciesId(e.target.value)}
+                  disabled={importing}
+                  className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                >
+                  {speciesCatalog.length > 0 ? (
+                    speciesCatalog.map((sp) => (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.commonName} ({sp.scientificName})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="cardinalis-cardinalis">Northern Cardinal (Cardinalis cardinalis)</option>
+                      <option value="turdus-migratorius">American Robin (Turdus migratorius)</option>
+                      <option value="bubo-virginianus">Great Horned Owl (Bubo virginianus)</option>
+                      <option value="dryocopus-pileatus">Pileated Woodpecker (Dryocopus pileatus)</option>
+                      <option value="poecile-atricapillus">Black-capped Chickadee (Poecile atricapillus)</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Audio Files (.wav, .mp3, .ogg, .flac — max 50 MB)
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept=".wav,.mp3,.ogg,.flac"
+                  disabled={importing}
+                  onChange={(e) => setSelectedFiles(e.target.files)}
+                  className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 file:cursor-pointer cursor-pointer bg-slate-900 border border-slate-700 rounded-xl p-2"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Files are validated for decodability, duration (≥ 0.5s), and de-duplicated by SHA256 checksum.
+                </span>
+              </div>
+
+              {importError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                  {importError}
+                </div>
+              )}
+
+              {importStatus && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{importStatus}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={importing}
+                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={importing || !selectedFiles || selectedFiles.length === 0}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  {importing ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Importing & Re-splitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload & Merge</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

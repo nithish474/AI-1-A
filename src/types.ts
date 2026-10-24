@@ -183,5 +183,19 @@ export interface DatasetStats {
     unassigned: number;
   };
   sources: Record<string, number>;
+  speciesSplitCounts?: Record<
+    string,
+    {
+      train: number;
+      val: number;
+      test: number;
+      unassigned: number;
+    }
+  >;
+  speciesDurations?: Record<string, number>;
+  manifestFingerprint?: string;
+  modelIsStale?: boolean;
+  rejectionReasons?: Record<string, number>;
 }
+
 

@@ -149,9 +149,12 @@ def populate_genuine_dataset(
             if info.get('lat') and info.get('lng'):
                 loc_str = f"Lat: {info['lat']}, Lng: {info['lng']}"
 
-            # Strip html tags from recordist name if present
+            # Strip html tags and unescape html entities from recordist name if present
             raw_artist = info.get('artist', 'Unknown')
-            clean_artist = re.sub(r'<[^>]+>', '', raw_artist).strip()
+            clean_artist = html.unescape(re.sub(r'<[^>]+>', '', raw_artist)).strip()
+
+            from manifest import calculate_sha256
+            fhash = calculate_sha256(dest_file)
 
             rec_entry = {
                 'recording_id': rec_id,
@@ -168,7 +171,8 @@ def populate_genuine_dataset(
                 'sample_rate': sample_rate,
                 'validation_status': 'valid',
                 'split_group': '',
-                'rejection_reason': ''
+                'rejection_reason': '',
+                'sha256': fhash
             }
             existing_by_rec[rec_id] = rec_entry
             downloaded += 1

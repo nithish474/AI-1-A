@@ -4,10 +4,12 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { z } from 'zod';
 import multer from 'multer';
+import { parse as parseCsv } from 'csv-parse/sync';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { dbService } from './src/db/database';
@@ -1119,95 +1121,183 @@ app.post('/api/predictions/:id/confirm', async (req, res) => {
   }
 });
 
-// Dataset manifest statistics endpoint
+// ==========================================
+// --- Dataset Manifest & Split Management ---
+// ==========================================
+const DATASET_RECORDINGS_DIR = path.join(process.cwd(), 'ml', 'data', 'recordings');
+if (!fs.existsSync(DATASET_RECORDINGS_DIR)) {
+  fs.mkdirSync(DATASET_RECORDINGS_DIR, { recursive: true });
+}
+
+const datasetStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, DATASET_RECORDINGS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const cleanBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const spId = (req.body.speciesId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+    cb(null, `${spId}_${cleanBase}_${Date.now()}${ext}`);
+  },
+});
+
+const uploadDataset = multer({
+  storage: datasetStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max per file
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.wav', '.mp3', '.ogg', '.flac'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported audio format '${ext}'. Allowed extensions: .wav, .mp3, .ogg, .flac`));
+    }
+  },
+});
+
+function computeDatasetStats() {
+  const manifestPath = path.join(process.cwd(), 'ml', 'data', 'manifest.csv');
+  if (!fs.existsSync(manifestPath)) {
+    return {
+      totalRecords: 0,
+      validRecordings: 0,
+      rejectedRecordings: 0,
+      totalDurationHours: 0,
+      totalDurationSeconds: 0,
+      speciesCounts: {},
+      splitCounts: { train: 0, val: 0, test: 0, unassigned: 0 },
+      sources: {},
+      speciesSplitCounts: {},
+      speciesDurations: {},
+      manifestFingerprint: '',
+      modelIsStale: false,
+      rejectionReasons: {},
+    };
+  }
+
+  const fileContent = fs.readFileSync(manifestPath);
+  const manifestFingerprint = crypto.createHash('sha256').update(fileContent).digest('hex').substring(0, 16);
+
+  let modelIsStale = false;
+  const metadataPath = path.join(process.cwd(), 'ml', 'checkpoints', 'model_metadata.json');
+  if (fs.existsSync(metadataPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      if (meta.dataset_fingerprint) {
+        modelIsStale = meta.dataset_fingerprint !== manifestFingerprint;
+      }
+    } catch (e) {
+      console.warn('Error reading model metadata for fingerprint comparison:', e);
+    }
+  }
+
+  let rawRecords: Record<string, string>[] = [];
+  try {
+    rawRecords = parseCsv(fileContent.toString('utf-8'), {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    }) as Record<string, string>[];
+  } catch (parseErr) {
+    console.error('Error parsing manifest CSV with csv-parse:', parseErr);
+    return {
+      totalRecords: 0,
+      validRecordings: 0,
+      rejectedRecordings: 0,
+      totalDurationHours: 0,
+      totalDurationSeconds: 0,
+      speciesCounts: {},
+      splitCounts: { train: 0, val: 0, test: 0, unassigned: 0 },
+      sources: {},
+      speciesSplitCounts: {},
+      speciesDurations: {},
+      manifestFingerprint,
+      modelIsStale,
+      rejectionReasons: { 'CSV parse failure': 1 },
+    };
+  }
+
+  const speciesCounts: Record<string, number> = {};
+  const splitCounts = { train: 0, val: 0, test: 0, unassigned: 0 };
+  const sources: Record<string, number> = {};
+  const speciesSplitCounts: Record<string, { train: number; val: number; test: number; unassigned: number }> = {};
+  const speciesDurations: Record<string, number> = {};
+  const rejectionReasons: Record<string, number> = {};
+
+  let totalDur = 0;
+  let validCount = 0;
+  let rejectedCount = 0;
+
+  for (const r of rawRecords) {
+    const rawStatus = (r.validation_status || '').trim();
+    const filePath = (r.file_path || '').trim();
+    const fullAudioPath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+    const fileExists = fs.existsSync(fullAudioPath);
+
+    // For each "valid" row check the file exists; if not, count it as rejected with reason "file missing"
+    if (rawStatus === 'valid' && !fileExists) {
+      rejectedCount++;
+      const reason = 'file missing';
+      rejectionReasons[reason] = (rejectionReasons[reason] || 0) + 1;
+      continue;
+    }
+
+    if (rawStatus === 'valid' && fileExists) {
+      validCount++;
+      const sp = (r.common_name || r.species_id || 'Unknown').trim();
+      speciesCounts[sp] = (speciesCounts[sp] || 0) + 1;
+
+      const split = ((r.split_group || '').trim() as 'train' | 'val' | 'test' | 'unassigned') || 'unassigned';
+      if (split in splitCounts) {
+        splitCounts[split]++;
+      } else {
+        splitCounts.unassigned++;
+      }
+
+      if (!speciesSplitCounts[sp]) {
+        speciesSplitCounts[sp] = { train: 0, val: 0, test: 0, unassigned: 0 };
+      }
+      if (split in speciesSplitCounts[sp]) {
+        speciesSplitCounts[sp][split]++;
+      } else {
+        speciesSplitCounts[sp].unassigned++;
+      }
+
+      const dur = parseFloat(r.duration) || 0;
+      totalDur += dur;
+      speciesDurations[sp] = parseFloat(((speciesDurations[sp] || 0) + dur).toFixed(2));
+
+      const src = (r.source || 'unknown').trim();
+      sources[src] = (sources[src] || 0) + 1;
+    } else {
+      rejectedCount++;
+      const reason = (r.rejection_reason || 'Validation rejected').trim();
+      rejectionReasons[reason] = (rejectionReasons[reason] || 0) + 1;
+    }
+  }
+
+  return {
+    totalRecords: rawRecords.length,
+    validRecordings: validCount,
+    rejectedRecordings: rejectedCount,
+    totalDurationHours: parseFloat((totalDur / 3600).toFixed(2)),
+    totalDurationSeconds: parseFloat(totalDur.toFixed(1)),
+    speciesCounts,
+    splitCounts,
+    sources,
+    speciesSplitCounts,
+    speciesDurations,
+    manifestFingerprint,
+    modelIsStale,
+    rejectionReasons,
+  };
+}
+
+// Dataset manifest statistics endpoint with Cache-Control: no-store
 app.get('/api/dataset/stats', async (_req, res) => {
   try {
-    const manifestPath = path.join(process.cwd(), 'ml', 'data', 'manifest.csv');
-    if (!fs.existsSync(manifestPath)) {
-      res.json({
-        totalRecords: 0,
-        validRecordings: 0,
-        rejectedRecordings: 0,
-        totalDurationHours: 0,
-        totalDurationSeconds: 0,
-        speciesCounts: {},
-        splitCounts: { train: 0, val: 0, test: 0, unassigned: 0 },
-        sources: {},
-      });
-      return;
-    }
-
-    const content = fs.readFileSync(manifestPath, 'utf-8');
-    const lines = content.split('\n').filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) {
-      res.json({ totalRecords: 0, validRecordings: 0 });
-      return;
-    }
-
-    function parseCsvLine(text: string): string[] {
-      const result: string[] = [];
-      let cur = '';
-      let inQuotes = false;
-      for (let i = 0; i < text.length; i++) {
-        const c = text[i];
-        if (c === '"') {
-          inQuotes = !inQuotes;
-        } else if (c === ',' && !inQuotes) {
-          result.push(cur.trim());
-          cur = '';
-        } else {
-          cur += c;
-        }
-      }
-      result.push(cur.trim());
-      return result.map((s) => s.replace(/^"|"$/g, ''));
-    }
-
-    const headers = parseCsvLine(lines[0]);
-    const records = lines.slice(1).map((line) => {
-      const row: Record<string, string> = {};
-      const parts = parseCsvLine(line);
-      headers.forEach((h, i) => {
-        row[h.trim()] = parts[i]?.trim() || '';
-      });
-      return row;
-    });
-
-    const speciesCounts: Record<string, number> = {};
-    const splitCounts = { train: 0, val: 0, test: 0, unassigned: 0 };
-    const sources: Record<string, number> = {};
-    let totalDur = 0;
-    let validCount = 0;
-    let rejectedCount = 0;
-
-    for (const r of records) {
-      const status = r.validation_status;
-      if (status === 'valid') {
-        validCount++;
-        const sp = r.common_name || r.species_id || 'Unknown';
-        speciesCounts[sp] = (speciesCounts[sp] || 0) + 1;
-        const split = (r.split_group as keyof typeof splitCounts) || 'unassigned';
-        if (split in splitCounts) splitCounts[split]++;
-        else splitCounts.unassigned++;
-        const src = r.source || 'unknown';
-        sources[src] = (sources[src] || 0) + 1;
-        const dur = parseFloat(r.duration) || 0;
-        totalDur += dur;
-      } else {
-        rejectedCount++;
-      }
-    }
-
-    res.json({
-      totalRecords: records.length,
-      validRecordings: validCount,
-      rejectedRecordings: rejectedCount,
-      totalDurationHours: parseFloat((totalDur / 3600).toFixed(2)),
-      totalDurationSeconds: parseFloat(totalDur.toFixed(1)),
-      speciesCounts,
-      splitCounts,
-      sources,
-    });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    const stats = computeDatasetStats();
+    res.json(stats);
   } catch (err) {
     console.error('Error generating dataset stats:', err);
     res.status(500).json({ error: 'Failed to retrieve dataset statistics.' });
@@ -1222,8 +1312,118 @@ app.get('/api/dataset/manifest', (_req, res) => {
     return;
   }
   res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Content-Disposition', 'attachment; filename="birdsong_manifest.csv"');
   fs.createReadStream(manifestPath).pipe(res);
+});
+
+// Import new audio recordings into dataset manifest and perform incremental re-split
+app.post('/api/dataset/import', uploadDataset.array('audioFiles') as any, async (req, res) => {
+  const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+  try {
+    const speciesId = typeof req.body.speciesId === 'string' ? req.body.speciesId.trim() : '';
+
+    if (!speciesId) {
+      uploadedFiles.forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
+      res.status(400).json({ error: 'speciesId from catalog is required.' });
+      return;
+    }
+
+    const species = await dbService.getSpeciesById(speciesId);
+    if (!species) {
+      uploadedFiles.forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
+      res.status(400).json({ error: `Unknown speciesId '${speciesId}' not found in catalog.` });
+      return;
+    }
+
+    if (uploadedFiles.length === 0) {
+      res.status(400).json({ error: 'No audio files provided for dataset import.' });
+      return;
+    }
+
+    // Call Python importer with --merge
+    const pythonBin = fs.existsSync('/ml_env/bin/python3') ? '/ml_env/bin/python3' : 'python3';
+    const importerScript = path.join(process.cwd(), 'ml', 'dataset', 'importer.py');
+
+    const importArgs = [
+      importerScript,
+      '--merge',
+      '--species-id', speciesId,
+      '--audio-dir', DATASET_RECORDINGS_DIR,
+    ];
+
+    const child = spawn(pythonBin, importArgs, {
+      cwd: process.cwd(),
+      env: { ...process.env, PYTHONPATH: path.join(process.cwd(), 'ml', 'dataset') },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    await new Promise<void>((resolve, reject) => {
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Importer exited with code ${code}: ${stderr || stdout}`));
+      });
+      child.on('error', reject);
+    });
+
+    let importReport: any = {};
+    try {
+      importReport = JSON.parse(stdout);
+    } catch {}
+
+    const updatedStats = computeDatasetStats();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.json({
+      success: true,
+      message: `Processed ${uploadedFiles.length} file(s). ${importReport.acceptedCount || 0} accepted, ${importReport.duplicateCount || 0} duplicate(s), ${importReport.rejectedCount || 0} rejected.`,
+      importReport,
+      stats: updatedStats,
+    });
+  } catch (err: any) {
+    console.error('Error during dataset import:', err);
+    res.status(500).json({ error: err.message || 'Dataset import failed.' });
+  }
+});
+
+// Incremental re-split endpoint
+app.post('/api/dataset/resplit', async (_req, res) => {
+  try {
+    const pythonBin = fs.existsSync('/ml_env/bin/python3') ? '/ml_env/bin/python3' : 'python3';
+    const splitScript = path.join(process.cwd(), 'ml', 'dataset', 'split.py');
+
+    const child = spawn(pythonBin, [splitScript], {
+      cwd: process.cwd(),
+      env: { ...process.env, PYTHONPATH: path.join(process.cwd(), 'ml', 'dataset') },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    await new Promise<void>((resolve, reject) => {
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Split script exited with code ${code}: ${stderr || stdout}`));
+      });
+      child.on('error', reject);
+    });
+
+    const updatedStats = computeDatasetStats();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.json({
+      success: true,
+      message: 'Incremental stratified split complete.',
+      stats: updatedStats,
+    });
+  } catch (err: any) {
+    console.error('Error during dataset resplit:', err);
+    res.status(500).json({ error: err.message || 'Dataset resplit failed.' });
+  }
 });
 
 // Latest held-out evaluation report endpoint
