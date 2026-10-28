@@ -947,7 +947,7 @@ app.post('/api/classify-cnn', upload.any() as any, async (req, res) => {
       formData.append('min_confidence', String(minConfidence));
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       const pyRes = await fetch(`${CNN_SERVICE_URL}/predict`, {
         method: 'POST',
@@ -971,9 +971,9 @@ app.post('/api/classify-cnn', upload.any() as any, async (req, res) => {
           disclaimer: pyData.disclaimer,
         };
       }
-    } catch {
-      // Python service not running; fallback to native Bioacoustic CNN engine
-    }
+    }  catch (err) {
+  console.error('Python CNN inference failed; using native fallback:', err);
+}
 
     // 2. If Python service was not available, run Native Bioacoustic CNN Engine
     if (!cnnData) {

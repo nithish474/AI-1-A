@@ -1,23 +1,42 @@
 {
   "model_version": "cnn-v1.0.0-cpu",
-  "evaluation_date": "2026-10-11T10:24:08Z",
-  "dataset_size_held_out": 5,
-  "num_classes": 5,
+  "dataset_fingerprint": "f618c12032e574db",
+  "created_at": "2026-10-26T10:38:35Z",
+  "checkpoint_path": "ml/checkpoints/best_model.pt",
+  "reliability": "low",
+  "warnings": [
+    "Statistical reliability is LOW: held-out test split contains only 6 recording(s) (0 to 2 per species). With N=6, a single misclassification swings accuracy by 16.7%. The 95% Wilson confidence interval is wide [18.8% - 81.2%]. To achieve statistically robust evaluation, add at least 15-20 recordings per species."
+  ],
+  "test_recordings_count": 6,
+  "test_windows_count": 273,
+  "num_classes": 7,
   "overall_metrics": {
-    "accuracy": 0.2,
-    "macro_precision": 0.04,
-    "macro_recall": 0.2,
-    "macro_f1": 0.0667,
-    "weighted_f1": 0.0667,
-    "average_confidence": 0.2191
+    "accuracy": 0.5,
+    "accuracy_ci_95": [
+      0.1876,
+      0.8124
+    ],
+    "macro_precision": 0.2143,
+    "macro_recall": 0.4286,
+    "macro_f1": 0.2857,
+    "weighted_precision": 0.25,
+    "weighted_recall": 0.5,
+    "weighted_f1": 0.3333,
+    "top2_accuracy": 0.5,
+    "window_level_accuracy": 0.37,
+    "average_confidence": 0.663
+  },
+  "baselines": {
+    "random_chance": 0.1429,
+    "majority_class": 0.3333
   },
   "per_species": {
     "bubo-virginianus": {
       "common_name": "Great Horned Owl",
       "scientific_name": "Bubo virginianus",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1_score": 0.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1_score": 0.6667,
       "support": 1
     },
     "cardinalis-cardinalis": {
@@ -26,7 +45,15 @@
       "precision": 0.0,
       "recall": 0.0,
       "f1_score": 0.0,
-      "support": 1
+      "support": 2
+    },
+    "cuculus-micropterus": {
+      "common_name": "Indian Cuckoo",
+      "scientific_name": "Cuculus micropterus",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "support": 0
     },
     "dryocopus-pileatus": {
       "common_name": "Pileated Woodpecker",
@@ -36,29 +63,57 @@
       "f1_score": 0.0,
       "support": 1
     },
-    "poecile-atricapillus": {
-      "common_name": "Black-capped Chickadee",
-      "scientific_name": "Poecile atricapillus",
+    "pavo-cristatus": {
+      "common_name": "Indian Peafowl",
+      "scientific_name": "Pavo cristatus",
       "precision": 0.0,
       "recall": 0.0,
       "f1_score": 0.0,
+      "support": 0
+    },
+    "poecile-atricapillus": {
+      "common_name": "Black-capped Chickadee",
+      "scientific_name": "Poecile atricapillus",
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1_score": 0.6667,
       "support": 1
     },
     "turdus-migratorius": {
       "common_name": "American Robin",
       "scientific_name": "Turdus migratorius",
-      "precision": 0.2,
+      "precision": 0.5,
       "recall": 1.0,
-      "f1_score": 0.3333,
+      "f1_score": 0.6667,
       "support": 1
     }
   },
+  "class_labels": [
+    "bubo-virginianus",
+    "cardinalis-cardinalis",
+    "cuculus-micropterus",
+    "dryocopus-pileatus",
+    "pavo-cristatus",
+    "poecile-atricapillus",
+    "turdus-migratorius"
+  ],
   "confusion_matrix": [
     [
+      1,
       0,
       0,
       0,
       0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
       1
     ],
     [
@@ -66,23 +121,40 @@
       0,
       0,
       0,
-      1
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
     ],
     [
       0,
       0,
       0,
       0,
-      1
+      0,
+      0,
+      0
     ],
     [
       0,
       0,
       0,
       0,
-      1
+      0,
+      1,
+      0
     ],
     [
+      0,
+      0,
       0,
       0,
       0,
@@ -90,76 +162,139 @@
       1
     ]
   ],
-  "class_labels": [
-    "bubo-virginianus",
-    "cardinalis-cardinalis",
-    "dryocopus-pileatus",
-    "poecile-atricapillus",
-    "turdus-migratorius"
-  ],
-  "common_confusion_pairs": [
-    {
-      "actual": "bubo-virginianus",
-      "predicted": "turdus-migratorius",
-      "count": 1
-    },
-    {
-      "actual": "cardinalis-cardinalis",
-      "predicted": "turdus-migratorius",
-      "count": 1
-    },
-    {
-      "actual": "dryocopus-pileatus",
-      "predicted": "turdus-migratorius",
-      "count": 1
-    },
-    {
-      "actual": "poecile-atricapillus",
-      "predicted": "turdus-migratorius",
-      "count": 1
-    }
-  ],
   "uncertainty_threshold": 0.4,
   "detailed_predictions": [
     {
-      "species_id": "cardinalis-cardinalis",
-      "true_class": "cardinalis-cardinalis",
-      "predicted_class": "turdus-migratorius",
-      "model_confidence": 0.2175,
-      "is_correct": false,
-      "is_uncertain": true
-    },
-    {
+      "recording_id": "xc-450919",
       "species_id": "bubo-virginianus",
+      "common_name": "Great Horned Owl",
+      "scientific_name": "Bubo virginianus",
       "true_class": "bubo-virginianus",
-      "predicted_class": "turdus-migratorius",
-      "model_confidence": 0.2202,
-      "is_correct": false,
-      "is_uncertain": true
+      "predicted_class": "bubo-virginianus",
+      "model_confidence": 0.6109,
+      "is_correct": true,
+      "is_top2": true,
+      "is_uncertain": false,
+      "num_windows": 10,
+      "class_probabilities": {
+        "bubo-virginianus": 0.6109,
+        "cardinalis-cardinalis": 0.0109,
+        "cuculus-micropterus": 0.1608,
+        "dryocopus-pileatus": 0.1147,
+        "pavo-cristatus": 0.0495,
+        "poecile-atricapillus": 0.0191,
+        "turdus-migratorius": 0.0341
+      }
     },
     {
+      "recording_id": "xc-131093",
       "species_id": "turdus-migratorius",
+      "common_name": "American Robin",
+      "scientific_name": "Turdus migratorius",
       "true_class": "turdus-migratorius",
       "predicted_class": "turdus-migratorius",
-      "model_confidence": 0.2194,
+      "model_confidence": 0.6118,
       "is_correct": true,
-      "is_uncertain": true
+      "is_top2": true,
+      "is_uncertain": false,
+      "num_windows": 85,
+      "class_probabilities": {
+        "bubo-virginianus": 0.0018,
+        "cardinalis-cardinalis": 0.0353,
+        "cuculus-micropterus": 0.0245,
+        "dryocopus-pileatus": 0.0879,
+        "pavo-cristatus": 0.0116,
+        "poecile-atricapillus": 0.2271,
+        "turdus-migratorius": 0.6118
+      }
     },
     {
+      "recording_id": "xc-241106",
       "species_id": "dryocopus-pileatus",
+      "common_name": "Pileated Woodpecker",
+      "scientific_name": "Dryocopus pileatus",
       "true_class": "dryocopus-pileatus",
-      "predicted_class": "turdus-migratorius",
-      "model_confidence": 0.2186,
+      "predicted_class": "bubo-virginianus",
+      "model_confidence": 0.9656,
       "is_correct": false,
-      "is_uncertain": true
+      "is_top2": false,
+      "is_uncertain": false,
+      "num_windows": 60,
+      "class_probabilities": {
+        "bubo-virginianus": 0.9656,
+        "cardinalis-cardinalis": 0.0001,
+        "cuculus-micropterus": 0.0176,
+        "dryocopus-pileatus": 0.0065,
+        "pavo-cristatus": 0.0011,
+        "poecile-atricapillus": 0.0079,
+        "turdus-migratorius": 0.0012
+      }
     },
     {
+      "recording_id": "xc-569276",
       "species_id": "poecile-atricapillus",
+      "common_name": "Black-capped Chickadee",
+      "scientific_name": "Poecile atricapillus",
       "true_class": "poecile-atricapillus",
+      "predicted_class": "poecile-atricapillus",
+      "model_confidence": 0.9227,
+      "is_correct": true,
+      "is_top2": true,
+      "is_uncertain": false,
+      "num_windows": 25,
+      "class_probabilities": {
+        "bubo-virginianus": 0.0038,
+        "cardinalis-cardinalis": 0.0546,
+        "cuculus-micropterus": 0.0013,
+        "dryocopus-pileatus": 0.0039,
+        "pavo-cristatus": 0.0019,
+        "poecile-atricapillus": 0.9227,
+        "turdus-migratorius": 0.0118
+      }
+    },
+    {
+      "recording_id": "xc-121457",
+      "species_id": "cardinalis-cardinalis",
+      "common_name": "Northern Cardinal",
+      "scientific_name": "Cardinalis cardinalis",
+      "true_class": "cardinalis-cardinalis",
       "predicted_class": "turdus-migratorius",
-      "model_confidence": 0.22,
+      "model_confidence": 0.54,
       "is_correct": false,
-      "is_uncertain": true
+      "is_top2": false,
+      "is_uncertain": false,
+      "num_windows": 77,
+      "class_probabilities": {
+        "bubo-virginianus": 0.0001,
+        "cardinalis-cardinalis": 0.0162,
+        "cuculus-micropterus": 0.0012,
+        "dryocopus-pileatus": 0.0084,
+        "pavo-cristatus": 0.0008,
+        "poecile-atricapillus": 0.4333,
+        "turdus-migratorius": 0.54
+      }
+    },
+    {
+      "recording_id": "xc-112830",
+      "species_id": "cardinalis-cardinalis",
+      "common_name": "Northern Cardinal",
+      "scientific_name": "Cardinalis cardinalis",
+      "true_class": "cardinalis-cardinalis",
+      "predicted_class": "poecile-atricapillus",
+      "model_confidence": 0.3272,
+      "is_correct": false,
+      "is_top2": false,
+      "is_uncertain": true,
+      "num_windows": 16,
+      "class_probabilities": {
+        "bubo-virginianus": 0.1228,
+        "cardinalis-cardinalis": 0.0131,
+        "cuculus-micropterus": 0.1315,
+        "dryocopus-pileatus": 0.2004,
+        "pavo-cristatus": 0.0672,
+        "poecile-atricapillus": 0.3272,
+        "turdus-migratorius": 0.1378
+      }
     }
   ]
 }

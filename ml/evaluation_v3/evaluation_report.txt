@@ -1,0 +1,53 @@
+============================================================================
+BIRDSONG BIOACOUSTICS - HELD-OUT CNN EVALUATION REPORT
+============================================================================
+Model Version:         cnn-v1.0.0-cpu
+Dataset Fingerprint:   92aa405fe9be1e5a
+Evaluation Timestamp:  2026-10-26T09:19:19Z
+Evaluated Checkpoint:  .\ml\checkpoints_retrained_v3\best_model.pt
+Statistical Rigor:     LOW
+Test Recordings:       4 held-out recordings
+Test Audio Windows:    180 (3.0s windows, hop 1.5s)
+Species Classes:       6
+----------------------------------------------------------------------------
+OVERALL PERFORMANCE (Recording-Level Aggregation):
+  Accuracy:            75.00% (95% Wilson CI: [30.06%, 95.44%])
+  Macro Precision:     41.67%
+  Macro Recall:        50.00%
+  Macro F1-Score:      0.4444
+  Weighted F1-Score:   0.6667
+  Top-2 Accuracy:      75.00%
+  Window Accuracy:     32.78% (59/180 windows)
+----------------------------------------------------------------------------
+BASELINES FOR COMPARISON:
+  Random Chance:       16.67%
+  Majority Class:      25.00%
+----------------------------------------------------------------------------
+STATISTICAL WARNINGS:
+  ! Statistical reliability is LOW: held-out test split contains only 4 recording(s) (0 to 1 per species). With N=4, a single misclassification swings accuracy by 25.0%. The 95% Wilson confidence interval is wide [30.1% - 95.4%]. To achieve statistically robust evaluation, add at least 15-20 recordings per species.
+----------------------------------------------------------------------------
+PER-SPECIES METRICS (Held-Out Support):
+  Species ID                 | Precision  | Recall   | F1      | Support
+  ----------------------------------------------------------------------
+  bubo-virginianus           | 50.00%     | 100.00%  | 0.6667  | 1
+  cuculus-micropterus        | 0.00%      | 0.00%    | 0.0000  | 0
+  dryocopus-pileatus         | 0.00%      | 0.00%    | 0.0000  | 1
+  pavo-cristatus             | 0.00%      | 0.00%    | 0.0000  | 0
+  poecile-atricapillus       | 100.00%    | 100.00%  | 1.0000  | 1
+  turdus-migratorius         | 100.00%    | 100.00%  | 1.0000  | 1
+----------------------------------------------------------------------------
+FULL CONFUSION MATRIX (Rows: Actual, Columns: Predicted):
+  Actual \ Pred             bubo-  cucul  dryoc  pavo-  poeci  turdu
+  bubo-virginianus              1      0      0      0      0      0
+  cuculus-micropterus           0      0      0      0      0      0
+  dryocopus-pileatus            1      0      0      0      0      0
+  pavo-cristatus                0      0      0      0      0      0
+  poecile-atricapillus          0      0      0      0      1      0
+  turdus-migratorius            0      0      0      0      0      1
+----------------------------------------------------------------------------
+PER-RECORDING PREDICTIONS:
+  [✓] xc-450919      (bubo-virginianus): predicted=bubo-virginianus (conf: 79.00%, windows: 10)
+  [✓] xc-131093      (turdus-migratorius): predicted=turdus-migratorius (conf: 32.61%, windows: 85)
+  [✗] xc-241106      (dryocopus-pileatus): predicted=bubo-virginianus (conf: 98.55%, windows: 60)
+  [✓] xc-569276      (poecile-atricapillus): predicted=poecile-atricapillus (conf: 96.61%, windows: 25)
+============================================================================

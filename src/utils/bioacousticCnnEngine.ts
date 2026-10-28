@@ -55,14 +55,15 @@ const N_MELS = 64;
 const F_MIN = 150.0;
 const F_MAX = 11000.0;
 
-// Default metadata for the 5 trained CNN classes
 const TRAINED_CLASSES = [
   'bubo-virginianus',
-  'cardinalis-cardinalis',
+  'cuculus-micropterus',
   'dryocopus-pileatus',
+  'pavo-cristatus',
   'poecile-atricapillus',
   'turdus-migratorius',
-];
+];// Default metadata for the 5 trained CNN classes
+
 
 const SPECIES_INFO: Record<string, { commonName: string; scientificName: string; peakHz: number }> = {
   'bubo-virginianus': {
@@ -70,11 +71,7 @@ const SPECIES_INFO: Record<string, { commonName: string; scientificName: string;
     scientificName: 'Bubo virginianus',
     peakHz: 340,
   },
-  'cardinalis-cardinalis': {
-    commonName: 'Northern Cardinal',
-    scientificName: 'Cardinalis cardinalis',
-    peakHz: 2200,
-  },
+  
   'dryocopus-pileatus': {
     commonName: 'Pileated Woodpecker',
     scientificName: 'Dryocopus pileatus',
@@ -487,8 +484,8 @@ export class BioacousticCnnEngine {
     const rawScores: Record<string, number> = {
       // 1. Bubo virginianus (Great Horned Owl): low resonant frequency (~340 Hz)
       'bubo-virginianus': Math.max(0.01, (lowEnergy * 2.2) / (1 + Math.abs(peakFreqHz - 340) / 400)),
-      // 2. Cardinalis cardinalis (Northern Cardinal): clear high whistling (~2200 Hz)
-      'cardinalis-cardinalis': Math.max(0.01, (midLowEnergy * 2.0) / (1 + Math.abs(peakFreqHz - 2200) / 700)),
+      
+    
       // 3. Dryocopus pileatus (Pileated Woodpecker): drumming/laughter (~1200 Hz)
       'dryocopus-pileatus': Math.max(0.01, (midLowEnergy * 1.8) / (1 + Math.abs(peakFreqHz - 1200) / 600)),
       // 4. Poecile atricapillus (Black-capped Chickadee): fee-bee high whistle (~3750 Hz)

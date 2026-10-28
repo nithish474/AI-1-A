@@ -1,32 +1,57 @@
-======================================================================
-BIRDSONG BIOACOUSTICS - CUSTOM CNN EVALUATION REPORT
-======================================================================
-Model Version: cnn-v1.0.0-cpu
-Held-Out Test Samples: 5
-Number of Species Classes: 5
-----------------------------------------------------------------------
-OVERALL PERFORMANCE (Held-Out Split):
-  Test Accuracy:     20.00%
-  Macro Precision:   4.00%
-  Macro Recall:      20.00%
-  Macro F1-Score:    0.0667
-  Weighted F1-Score: 0.0667
-----------------------------------------------------------------------
-PER-SPECIES METRICS:
-  Great Horned Owl (bubo-virginianus):
-    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
-  Northern Cardinal (cardinalis-cardinalis):
-    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
-  Pileated Woodpecker (dryocopus-pileatus):
-    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
-  Black-capped Chickadee (poecile-atricapillus):
-    Precision: 0.00% | Recall: 0.00% | F1: 0.0000 | Support: 1
-  American Robin (turdus-migratorius):
-    Precision: 20.00% | Recall: 100.00% | F1: 0.3333 | Support: 1
-----------------------------------------------------------------------
-TOP CONFUSION PAIRS:
-  Actual: bubo-virginianus -> Predicted: turdus-migratorius (1 occurrences)
-  Actual: cardinalis-cardinalis -> Predicted: turdus-migratorius (1 occurrences)
-  Actual: dryocopus-pileatus -> Predicted: turdus-migratorius (1 occurrences)
-  Actual: poecile-atricapillus -> Predicted: turdus-migratorius (1 occurrences)
-======================================================================
+============================================================================
+BIRDSONG BIOACOUSTICS - HELD-OUT CNN EVALUATION REPORT
+============================================================================
+Model Version:         cnn-v1.0.0-cpu
+Dataset Fingerprint:   f618c12032e574db
+Evaluation Timestamp:  2026-10-26T10:38:35Z
+Evaluated Checkpoint:  ml/checkpoints/best_model.pt
+Statistical Rigor:     LOW
+Test Recordings:       6 held-out recordings
+Test Audio Windows:    273 (3.0s windows, hop 1.5s)
+Species Classes:       7
+----------------------------------------------------------------------------
+OVERALL PERFORMANCE (Recording-Level Aggregation):
+  Accuracy:            50.00% (95% Wilson CI: [18.76%, 81.24%])
+  Macro Precision:     21.43%
+  Macro Recall:        42.86%
+  Macro F1-Score:      0.2857
+  Weighted F1-Score:   0.3333
+  Top-2 Accuracy:      50.00%
+  Window Accuracy:     37.00% (101/273 windows)
+----------------------------------------------------------------------------
+BASELINES FOR COMPARISON:
+  Random Chance:       14.29%
+  Majority Class:      33.33%
+----------------------------------------------------------------------------
+STATISTICAL WARNINGS:
+  ! Statistical reliability is LOW: held-out test split contains only 6 recording(s) (0 to 2 per species). With N=6, a single misclassification swings accuracy by 16.7%. The 95% Wilson confidence interval is wide [18.8% - 81.2%]. To achieve statistically robust evaluation, add at least 15-20 recordings per species.
+----------------------------------------------------------------------------
+PER-SPECIES METRICS (Held-Out Support):
+  Species ID                 | Precision  | Recall   | F1      | Support
+  ----------------------------------------------------------------------
+  bubo-virginianus           | 50.00%     | 100.00%  | 0.6667  | 1
+  cardinalis-cardinalis      | 0.00%      | 0.00%    | 0.0000  | 2
+  cuculus-micropterus        | 0.00%      | 0.00%    | 0.0000  | 0
+  dryocopus-pileatus         | 0.00%      | 0.00%    | 0.0000  | 1
+  pavo-cristatus             | 0.00%      | 0.00%    | 0.0000  | 0
+  poecile-atricapillus       | 50.00%     | 100.00%  | 0.6667  | 1
+  turdus-migratorius         | 50.00%     | 100.00%  | 0.6667  | 1
+----------------------------------------------------------------------------
+FULL CONFUSION MATRIX (Rows: Actual, Columns: Predicted):
+  Actual \ Pred             bubo-  cardi  cucul  dryoc  pavo-  poeci  turdu
+  bubo-virginianus              1      0      0      0      0      0      0
+  cardinalis-cardinalis         0      0      0      0      0      1      1
+  cuculus-micropterus           0      0      0      0      0      0      0
+  dryocopus-pileatus            1      0      0      0      0      0      0
+  pavo-cristatus                0      0      0      0      0      0      0
+  poecile-atricapillus          0      0      0      0      0      1      0
+  turdus-migratorius            0      0      0      0      0      0      1
+----------------------------------------------------------------------------
+PER-RECORDING PREDICTIONS:
+  [✓] xc-450919      (bubo-virginianus): predicted=bubo-virginianus (conf: 61.09%, windows: 10)
+  [✓] xc-131093      (turdus-migratorius): predicted=turdus-migratorius (conf: 61.18%, windows: 85)
+  [✗] xc-241106      (dryocopus-pileatus): predicted=bubo-virginianus (conf: 96.56%, windows: 60)
+  [✓] xc-569276      (poecile-atricapillus): predicted=poecile-atricapillus (conf: 92.27%, windows: 25)
+  [✗] xc-121457      (cardinalis-cardinalis): predicted=turdus-migratorius (conf: 54.00%, windows: 77)
+  [✗] xc-112830      (cardinalis-cardinalis): predicted=poecile-atricapillus (conf: 32.72%, windows: 16)
+============================================================================
